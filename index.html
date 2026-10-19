@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Apex Drive - 3D Realistic Free Driving Simulator</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+    
+    <!-- Three.js 3D Engine -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <!-- Cannon.js Physics Engine -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Outfit', sans-serif;
+            background-color: #030712;
+            color: #ffffff;
+        }
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+        .glass-button {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            transition: all 0.2s ease;
+        }
+        .glass-button:hover {
+            background: rgba(59, 130, 246, 0.3);
+            border-color: rgba(96, 165, 250, 0.5);
+            transform: translateY(-2px);
+        }
+        .glass-button:active {
+            transform: translateY(1px);
+        }
+        .touch-pad {
+            background: rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            transition: background 0.1s;
+        }
+        .touch-pad:active, .touch-pad.active {
+            background: rgba(59, 130, 246, 0.6);
+            border-color: rgba(147, 197, 253, 0.8);
+            transform: scale(0.94);
+        }
+        /* Custom Speedometer SVG Arc animation */
+        .gauge-ring {
+            transition: stroke-dashoffset 0.1s ease-out;
+        }
+        /* Custom scrollbar for drawer */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Main UI Overlay -->
+    <div id="ui-overlay" class="relative z-10 w-full h-full pointer-events-none flex flex-col justify-between p-4 sm:p-6">
+        
+        <!-- Top Navigation & Controls Bar -->
+        <div class="flex justify-between items-start w-full">
+            <!-- Game Branding -->
+            <div class="glass-panel p-3.5 sm:p-4 rounded-2xl flex items-center gap-3 pointer-events-auto">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
+                    <i class="fa-solid fa-car-side text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-orbitron text-base sm:text-lg font-bold tracking-wider text-white">APEX <span class="text-blue-400">DRIVE</span></h1>
+                    <p class="text-xs text-gray-400 font-medium">3D Realistic Simulator</p>
+                </div>
+            </div>
+
+            <!-- Action Toolbar Buttons -->
+            <div class="flex items-center gap-2 sm:gap-3 pointer-events-auto">
+                <!-- Audio Toggle -->
+                <button id="btn-audio" class="glass-button w-11 h-11 rounded-xl flex items-center justify-center text-gray-300 hover:text-white" title="Toggle Sound (M)">
+                    <i id="icon-audio" class="fa-solid fa-volume-high text-base"></i>
+                </button>
+
+                <!-- Camera Switcher -->
+                <button id="btn-camera" class="glass-button h-11 px-3.5 rounded-xl flex items-center gap-2 text-gray-200 hover:text-white text-xs font-semibold" title="Switch Camera (C)">
+                    <i class="fa-solid fa-video text-blue-400"></i>
+                    <span id="cam-label" class="hidden sm:inline">Follow Cam</span>
+                </button>
+
+                <!-- Day/Night Switch -->
+                <button id="btn-daynight" class="glass-button w-11 h-11 rounded-xl flex items-center justify-center text-yellow-400 hover:text-yellow-300" title="Day / Night (N)">
+                    <i id="icon-daynight" class="fa-solid fa-sun text-base"></i>
+                </button>
+
+                <!-- Vehicle Settings Modal Toggle -->
+                <button id="btn-settings" class="glass-button w-11 h-11 rounded-xl flex items-center justify-center text-gray-300 hover:text-white" title="Car Customizer">
+                    <i class="fa-solid fa-sliders text-base"></i>
+                </button>
+
+                <!-- Reset Car -->
+                <button id="btn-reset" class="glass-button h-11 px-3 sm:px-4 rounded-xl flex items-center gap-2 bg-red-500/20 text-red-300 hover:bg-red-500/30 border-red-500/30 text-xs font-semibold" title="Reset Vehicle (R)">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    <span class="hidden sm:inline">Reset</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Center Notification / Drift Score Overlay -->
+        <div class="flex flex-col items-center justify-center text-center">
+            <div id="drift-box" class="opacity-0 transition-opacity duration-300 transform scale-90 glass-panel px-6 py-2 rounded-2xl border-amber-500/40">
+                <div class="text-xs uppercase tracking-widest text-amber-400 font-bold">Drift Combo</div>
+                <div id="drift-score" class="font-orbitron text-2xl sm:text-3xl font-black text-white">+0</div>
+            </div>
+            <div id="toast-msg" class="mt-2 glass-panel px-4 py-1.5 rounded-xl text-xs text-gray-300 opacity-0 transition-all duration-300 transform translate-y-2">
+                Press WASD or Arrow Keys to Drive
+            </div>
+        </div>
+
+        <!-- Bottom Section: Speedometer Dashboard & Controls -->
+        <div class="flex justify-between items-end w-full gap-4">
+            
+            <!-- Mobile Left Touch Pad (Steering) -->
+            <div id="touch-left-container" class="pointer-events-auto flex gap-3 sm:hidden mb-2">
+                <button id="touch-left" class="touch-pad w-16 h-16"><i class="fa-solid fa-arrow-left"></i></button>
+                <button id="touch-right" class="touch-pad w-16 h-16"><i class="fa-solid fa-arrow-right"></i></button>
+            </div>
+
+            <!-- Central HUD Dashboard (Speedometer, Gear, RPM) -->
+            <div class="glass-panel p-4 rounded-3xl pointer-events-auto mx-auto flex items-center gap-4 sm:gap-6 border-blue-500/20">
+                <!-- Circular SVG Speed Gauge -->
+                <div class="relative w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center">
+                    <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                        <!-- Gauge Background Track -->
+                        <circle cx="50" cy="50" r="40" stroke="rgba(255,255,255,0.1)" stroke-width="8" fill="transparent" />
+                        <!-- RPM Arc Track -->
+                        <circle id="rpm-arc" class="gauge-ring" cx="50" cy="50" r="40" stroke="#3b82f6" stroke-width="8" 
+                                fill="transparent" stroke-dasharray="251.2" stroke-dashoffset="251.2" stroke-linecap="round" />
+                    </svg>
+                    <!-- Speed Text Readout -->
+                    <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                        <span id="speed-display" class="font-orbitron text-2xl sm:text-3xl font-black tracking-tight text-white">0</span>
+                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">KM/H</span>
+                    </div>
+                </div>
+
+                <!-- Gear & Performance Telemetry -->
+                <div class="flex flex-col justify-center gap-1 border-l border-white/10 pl-4 sm:pl-6">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-400 font-medium">GEAR</span>
+                        <span id="gear-display" class="font-orbitron font-bold text-lg text-blue-400">D</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-400 font-medium">RPM</span>
+                        <span id="rpm-display" class="font-orbitron text-xs font-semibold text-gray-200">800</span>
+                    </div>
+                    <!-- Headlights status -->
+                    <div class="flex items-center gap-2 mt-1">
+                        <button id="btn-headlights" class="glass-button text-[11px] px-2.5 py-1 rounded-lg text-gray-300 hover:text-white flex items-center gap-1.5" title="Toggle Headlights (L)">
+                            <i id="icon-headlight" class="fa-solid fa-lightbulb text-amber-400"></i>
+                            <span class="font-semibold text-[10px]">LIGHTS</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile Right Touch Pad (Gas, Brake, Handbrake) -->
+            <div id="touch-right-container" class="pointer-events-auto flex items-end gap-2 sm:hidden mb-2">
+                <button id="touch-brake" class="touch-pad w-14 h-14 bg-red-500/20 text-red-400 border-red-500/30"><i class="fa-solid fa-stop text-sm"></i></button>
+                <button id="touch-handbrake" class="touch-pad w-12 h-12 bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs font-bold font-orbitron">P</button>
+                <button id="touch-gas" class="touch-pad w-16 h-20 bg-green-500/20 text-green-400 border-green-500/30 rounded-2xl"><i class="fa-solid fa-chevron-up"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Car Customizer Settings Side Panel Modal -->
+    <div id="settings-panel" class="fixed top-0 right-0 h-full w-80 max-w-[85vw] glass-panel z-30 p-6 transform translate-x-full transition-transform duration-300 ease-in-out overflow-y-auto pointer-events-auto flex flex-col justify-between">
+        <div>
+            <div class="flex justify-between items-center mb-6 pb-4 border-b border-white/10">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-palette text-blue-400 text-lg"></i>
+                    <h2 class="font-orbitron font-bold text-lg text-white">CAR STUDIO</h2>
+                </div>
+                <button id="btn-close-settings" class="text-gray-400 hover:text-white text-xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Color Customizer -->
+            <div class="space-y-5">
+                <div>
+                    <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider block mb-2">Body Color Paint</label>
+                    <div class="grid grid-cols-5 gap-2.5">
+                        <button class="color-picker-btn w-9 h-9 rounded-xl border-2 border-white/50 bg-red-600" data-color="#dc2626"></button>
+                        <button class="color-picker-btn w-9 h-9 rounded-xl border-2 border-transparent bg-blue-600" data-color="#2563eb"></button>
+                        <button class="color-picker-btn w-9 h-9 rounded-xl border-2 border-transparent bg-emerald-500" data-color="#10b981"></button>
+                        <button class="color-picker-btn w-9 h-9 rounded-xl border-2 border-transparent bg-amber-500" data-color="#f59e0b"></button>
+                        <button class="color-picker-btn w-9 h-9 rounded-xl border-2 border-transparent bg-purple-600" data-color="#9333ea"></button>
+                        <button class="color-picker-btn w-9 h-9 rounded-xl border-2 border-transparent bg-slate-900" data-color="#0f172a"></button>
+                        <button class="color-picker-btn w-9 h-9 rounded-xl border-2 border-transparent bg-slate-100" data-color="#f8fafc"></button>
+                        <button class="color-picker-btn w-9 h-9 rounded-xl border-2 border-transparent bg-pink-500" data-color="#ec4899"></button>
+                        <button class="color-picker-btn w-9 h-9 rounded-xl border-2 border-transparent bg-cyan-400" data-color="#22d3ee"></button>
+                        <button class="color-picker-btn w-9 h-9 rounded-xl border-2 border-transparent bg-lime-400" data-color="#a3e635"></button>
+                    </div>
+                </div>
+
+                <!-- Suspension Stiffness Slider -->
+                <div>
+                    <div class="flex justify-between text-xs font-semibold text-gray-300 mb-1">
+                        <span>Suspension Stiffness</span>
+                        <span id="suspension-val" class="text-blue-400 font-orbitron">30</span>
+                    </div>
+                    <input id="slider-suspension" type="range" min="15" max="60" value="30" class="w-full accent-blue-500 bg-gray-800 rounded-lg h-2 cursor-pointer">
+                </div>
+
+                <!-- Friction / Drift Grip Slider -->
+                <div>
+                    <div class="flex justify-between text-xs font-semibold text-gray-300 mb-1">
+                        <span>Tire Grip (Friction)</span>
+                        <span id="grip-val" class="text-blue-400 font-orbitron">4.5</span>
+                    </div>
+                    <input id="slider-grip" type="range" min="1" max="10" step="0.5" value="4.5" class="w-full accent-blue-500 bg-gray-800 rounded-lg h-2 cursor-pointer">
+                </div>
+
+                <!-- Engine Horsepower / Force -->
+                <div>
+                    <div class="flex justify-between text-xs font-semibold text-gray-300 mb-1">
+                        <span>Engine Power</span>
+                        <span id="power-val" class="text-blue-400 font-orbitron">2200</span>
+                    </div>
+                    <input id="slider-power" type="range" min="1000" max="4000" step="100" value="2200" class="w-full accent-blue-500 bg-gray-800 rounded-lg h-2 cursor-pointer">
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls Helper Info Footer -->
+        <div class="mt-6 pt-4 border-t border-white/10 text-xs text-gray-400 space-y-1.5 font-medium">
+            <div class="font-bold text-gray-200 mb-1">Keyboard Controls:</div>
+            <div class="flex justify-between"><span>Steer:</span> <span class="text-gray-200">A / D or ← / →</span></div>
+            <div class="flex justify-between"><span>Accelerate:</span> <span class="text-gray-200">W or ↑</span></div>
+            <div class="flex justify-between"><span>Brake / Rev:</span> <span class="text-gray-200">S or ↓</span></div>
+            <div class="flex justify-between"><span>Handbrake:</span> <span class="text-gray-200">Spacebar</span></div>
+            <div class="flex justify-between"><span>Switch Camera:</span> <span class="text-gray-200">C</span></div>
+            <div class="flex justify-between"><span>Toggle Lights:</span> <span class="text-gray-200">L</span></div>
+            <div class="flex justify-between"><span>Day / Night:</span> <span class="text-gray-200">N</span></div>
+        </div>
+    </div>
+
+    <script>
+        /* =========================================================================
+           APEX DRIVE - REALISTIC 3D VEHICLE ENGINE
+           Built with Three.js (WebGL rendering) + Cannon.js (Raycast physics)
+           ========================================================================= */
+
+        // Game State Variables
+        let scene, camera, renderer, world;
+        let vehicle, chassisBody, chassisMesh;
+        let wheelMeshes = [];
+        let wheelBodies = [];
+        let keyState = {};
+        let touchState = { gas: false, brake: false, left: false, right: false, handbrake: false };
+        
+        // Customization & Physics Parameters
+        let carColor = 0xdc2626;
+        let maxEngineForce = 2200;
+        let maxBrakingForce = 45;
+        let suspensionStiffness = 30;
+        let frictionSlip = 4.5;
+        
+        // Environment & Lights
+        let sunLight, ambientLight, isNight = false;
+        let headLights = [], tailLightMeshes = [];
+        let roadObjects = [], physicsObstacles = [];
+
+        // Camera Modes: 0=Follow, 1=Cockpit/1st Person, 2=Hood, 3=TopDown, 4=Orbit
+        let cameraMode = 0;
+        const cameraModeNames = ["Follow Cam", "Cockpit View", "Hood Cam", "Top Down", "Orbit Cam"];
+
+        // Audio System (Web Audio API Engine Sound)
+        let audioCtx, engineOsc, engineGain, engineFilter, screechBuffer, screechNode, screechGain;
+        let audioEnabled = false;
+
+        // Telemetry & Drift Scoring
+        let currentSpeed = 0;
+        let engineRPM = 800;
+        let currentGear = 'D';
+        let driftScore = 0;
+        let activeDriftCombo = 0;
+
+        // Initialize App on Window Load
+        window.addEventListener('load', () => {
+            initPhysics();
+            initThree();
+            createEnvironment();
+            createCar();
+            setupEvents();
+            setupUI();
+            
+            // Start Engine Loop
+            animate();
+            
+            showToast("Welcome to Apex Drive! Press W / Arrow Up to accelerate.");
+        });
+
+        /* =========================================================================
+           PHYSICS WORLD SETUP (CANNON.JS)
+           ========================================================================= */
+        function initPhysics() {
+            world = new CANNON.World();
+            world.broadphase = new CANNON.SAPBroadphase(world);
+            world.gravity.set(0, -9.82, 0);
+            world.defaultContactMaterial.friction = 0.4;
+            world.defaultContactMaterial.restitution = 0.0;
+
+            // Physics Materials
+            const groundMaterial = new CANNON.Material("groundMaterial");
+            const wheelMaterial = new CANNON.Material("wheelMaterial");
+            const wheelGroundContact = new CANNON.ContactMaterial(wheelMaterial, groundMaterial, {
+                friction: 0.8,
+                restitution: 0.0,
+                contactEquationStiffness: 1000
+            });
+            world.addContactMaterial(wheelGroundContact);
+
+            // Ground Plane Physics
+            const groundShape = new CANNON.Plane();
+            const groundBody = new CANNON.Body({ mass: 0, material: groundMaterial });
+            groundBody.addShape(groundShape);
+            groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+            world.addBody(groundBody);
+        }
+
+        /* =========================================================================
+           THREE.JS GRAPHICS SETUP
+           ========================================================================= */
+        function initThree() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb); // Day sky blue
+            scene.fog = new THREE.FogExp2(0x87ceeb, 0.003);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 5, -10);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.0;
+            container.appendChild(renderer.domElement);
+
+            // Lighting Setup
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            sunLight = new THREE.DirectionalLight(0xfffaed, 1.2);
+            sunLight.position.set(100, 150, 50);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 10;
+            sunLight.shadow.camera.far = 400;
+            const d = 80;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            sunLight.shadow.bias = -0.0005;
+            scene.add(sunLight);
+        }
+
+        /* =========================================================================
+           ENVIRONMENT GENERATION (Road Network, Buildings, Stunt Ramps)
+           ========================================================================= */
+        function createEnvironment() {
+            // Procedural Asphalt Texture Generator
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            
+            // Base dark asphalt
+            ctx.fillStyle = '#22252a';
+            ctx.fillRect(0, 0, 512, 512);
+            
+            // Noise grain
+            for (let i = 0; i < 20000; i++) {
+                ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.05)';
+                ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
+            }
+
+            // White road markings
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(250, 0, 12, 512); // Center line
+            ctx.fillRect(20, 0, 8, 512);   // Side line
+            ctx.fillRect(480, 0, 8, 512);  // Side line
+
+            const asphaltTexture = new THREE.CanvasTexture(canvas);
+            asphaltTexture.wrapS = THREE.RepeatWrapping;
+            asphaltTexture.wrapT = THREE.RepeatWrapping;
+            asphaltTexture.repeat.set(100, 100);
+
+            // Ground Mesh
+            const groundGeo = new THREE.PlaneGeometry(1000, 1000);
+            const groundMat = new THREE.MeshStandardMaterial({
+                map: asphaltTexture,
+                roughness: 0.8,
+                metalness: 0.1
+            });
+            const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+            groundMesh.rotation.x = -Math.PI / 2;
+            groundMesh.receiveShadow = true;
+            scene.add(groundMesh);
+
+            // Procedural City Buildings Texture
+            const bldgCanvas = document.createElement('canvas');
+            bldgCanvas.width = 256;
+            bldgCanvas.height = 256;
+            const bctx = bldgCanvas.getContext('2d');
+            bctx.fillStyle = '#1e293b';
+            bctx.fillRect(0, 0, 256, 256);
+            bctx.fillStyle = '#fef08a'; // Glowing windows
+            for (let x = 20; x < 230; x += 35) {
+                for (let y = 20; y < 230; y += 45) {
+                    if (Math.random() > 0.3) {
+                        bctx.fillRect(x, y, 20, 30);
+                    }
+                }
+            }
+            const bldgTexture = new THREE.CanvasTexture(bldgCanvas);
+            bldgTexture.wrapS = THREE.RepeatWrapping;
+            bldgTexture.wrapT = THREE.RepeatWrapping;
+
+            const bldgGeo = new THREE.BoxGeometry(1, 1, 1);
+            const bldgMat = new THREE.MeshStandardMaterial({
+                color: 0x334155,
+                roughness: 0.3,
+                metalness: 0.5,
+                map: bldgTexture
+            });
+
+            // Populate City Grid Surroundings
+            for (let i = -4; i <= 4; i++) {
+                for (let j = -4; j <= 4; j++) {
+                    if (Math.abs(i) < 2 && Math.abs(j) < 2) continue; // Keep center clear for free driving
+
+                    const w = 25 + Math.random() * 20;
+                    const h = 40 + Math.random() * 70;
+                    const d = 25 + Math.random() * 20;
+                    
+                    const x = i * 90 + (Math.random() - 0.5) * 20;
+                    const z = j * 90 + (Math.random() - 0.5) * 20;
+
+                    const bldg = new THREE.Mesh(bldgGeo, bldgMat);
+                    bldg.position.set(x, h / 2, z);
+                    bldg.scale.set(w, h, d);
+                    bldg.castShadow = true;
+                    bldg.receiveShadow = true;
+                    scene.add(bldg);
+
+                    // Add Cannon Static Physics Body for Building
+                    const bldgShape = new CANNON.Box(new CANNON.Vec3(w / 2, h / 2, d / 2));
+                    const bldgBody = new CANNON.Body({ mass: 0 });
+                    bldgBody.addShape(bldgShape);
+                    bldgBody.position.set(x, h / 2, z);
+                    world.addBody(bldgBody);
+                }
+            }
+
+            // Create Interactive Stunt Jump Ramps
+            createRamp(0, 0, 40, 0); // Front Ramp
+            createRamp(-60, 0, -50, Math.PI / 4); // Diagonal Ramp
+            createRamp(70, 0, -30, -Math.PI / 3); // Curved Jump
+
+            // Create Physics Traffic Cones Obstacles
+            for (let c = 0; c < 15; c++) {
+                createTrafficCone((Math.random() - 0.5) * 60, 20 + Math.random() * 80);
+            }
+        }
+
+        // Helper to construct jump ramps
+        function createRamp(x, y, z, rotationY) {
+            const rampWidth = 10, rampHeight = 3.5, rampLength = 12;
+            const rampGeo = new THREE.BufferGeometry();
+            
+            // Custom wedge geometry
+            const vertices = new Float32Array([
+                // Bottom
+                -rampWidth/2, 0, -rampLength/2,
+                 rampWidth/2, 0, -rampLength/2,
+                 rampWidth/2, 0,  rampLength/2,
+                -rampWidth/2, 0,  rampLength/2,
+                // Top ramp slope
+                -rampWidth/2, rampHeight,  rampLength/2,
+                 rampWidth/2, rampHeight,  rampLength/2,
+            ]);
+            
+            const indices = [
+                0, 2, 1, 0, 3, 2, // Bottom
+                0, 1, 5, 0, 5, 4, // Front slope
+                1, 2, 5,          // Right side
+                0, 4, 3,          // Left side
+                3, 4, 5, 3, 5, 2  // Back
+            ];
+
+            rampGeo.setIndex(indices);
+            rampGeo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+            rampGeo.computeVertexNormals();
+
+            const rampMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.4, metalness: 0.6 });
+            const rampMesh = new THREE.Mesh(rampGeo, rampMat);
+            rampMesh.position.set(x, y, z);
+            rampMesh.rotation.y = rotationY;
+            rampMesh.castShadow = true;
+            rampMesh.receiveShadow = true;
+            scene.add(rampMesh);
+
+            // Physics Body for Ramp
+            const shape = new CANNON.Box(new CANNON.Vec3(rampWidth / 2, rampHeight / 2, rampLength / 2));
+            const body = new CANNON.Body({ mass: 0 });
+            body.addShape(shape, new CANNON.Vec3(0, rampHeight / 2, 0));
+            body.position.set(x, y, z);
+            body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), rotationY);
+            world.addBody(body);
+        }
+
+        // Helper to spawn knockable physics traffic cones
+        function createTrafficCone(x, z) {
+            const coneGeo = new THREE.ConeGeometry(0.4, 0.9, 12);
+            const coneMat = new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.5 });
+            const coneMesh = new THREE.Mesh(coneGeo, coneMat);
+            coneMesh.castShadow = true;
+            scene.add(coneMesh);
+
+            const coneShape = new CANNON.Cylinder(0.01, 0.4, 0.9, 10);
+            const coneBody = new CANNON.Body({ mass: 5 }); // Dynamic light object
+            coneBody.addShape(coneShape);
+            coneBody.position.set(x, 0.45, z);
+            world.addBody(coneBody);
+
+            physicsObstacles.push({ mesh: coneMesh, body: coneBody });
+        }
+
+        /* =========================================================================
+           3D SPORTS CAR & RAYCAST VEHICLE PHYSICS SETUP
+           ========================================================================= */
+        function createCar() {
+            // 1. Cannon Chassis Physics Body
+            const chassisShape = new CANNON.Box(new CANNON.Vec3(1.0, 0.5, 2.1));
+            chassisBody = new CANNON.Body({ mass: 1400 });
+            chassisBody.addShape(chassisShape, new CANNON.Vec3(0, 0.4, 0));
+            chassisBody.position.set(0, 2, 0);
+            chassisBody.angularDamping = 0.5;
+
+            // Create Raycast Vehicle Instance
+            vehicle = new CANNON.RaycastVehicle({
+                chassisBody: chassisBody,
+                indexRightAxis: 0,
+                indexUpAxis: 1,
+                indexForwardAxis: 2
+            });
+
+            // Wheel Configuration Parameters
+            const wheelOptions = {
+                radius: 0.38,
+                directionLocal: new CANNON.Vec3(0, -1, 0),
+                suspensionStiffness: suspensionStiffness,
+                suspensionRestLength: 0.35,
+                frictionSlip: frictionSlip,
+                dampingRelaxation: 2.3,
+                dampingCompression: 4.4,
+                maxSuspensionForce: 100000,
+                rollInfluence: 0.01,
+                axleLocal: new CANNON.Vec3(-1, 0, 0),
+                chassisConnectionPointLocal: new CANNON.Vec3(1, 1, 0),
+                maxSuspensionTravel: 0.25,
+                customSlidingRotationalSpeed: -30,
+                useCustomSlidingRotationalSpeed: true
+            };
+
+            // Front Left Wheel
+            wheelOptions.chassisConnectionPointLocal.set(0.9, 0.1, 1.3);
+            vehicle.addWheel(wheelOptions);
+
+            // Front Right Wheel
+            wheelOptions.chassisConnectionPointLocal.set(-0.9, 0.1, 1.3);
+            vehicle.addWheel(wheelOptions);
+
+            // Rear Left Wheel
+            wheelOptions.chassisConnectionPointLocal.set(0.9, 0.1, -1.3);
+            vehicle.addWheel(wheelOptions);
+
+            // Rear Right Wheel
+            wheelOptions.chassisConnectionPointLocal.set(-0.9, 0.1, -1.3);
+            vehicle.addWheel(wheelOptions);
+
+            vehicle.addToWorld(world);
+
+            // 2. Three.js Detailed Visual Car Model Mesh
+            chassisMesh = new THREE.Group();
+
+            // Main Car Body Shell
+            const bodyGeo = new THREE.BoxGeometry(1.9, 0.65, 4.2);
+            const bodyMat = new THREE.MeshStandardMaterial({
+                color: carColor,
+                metalness: 0.8,
+                roughness: 0.2,
+                envMapIntensity: 1.0
+            });
+            const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+            bodyMesh.position.y = 0.5;
+            bodyMesh.castShadow = true;
+            chassisMesh.add(bodyMesh);
+
+            // Cabin / Roof Glass Top
+            const cabinGeo = new THREE.BoxGeometry(1.5, 0.55, 2.0);
+            const cabinMat = new THREE.MeshStandardMaterial({
+                color: 0x111827,
+                metalness: 0.9,
+                roughness: 0.1,
+                transparent: true,
+                opacity: 0.85
+            });
+            const cabinMesh = new THREE.Mesh(cabinGeo, cabinMat);
+            cabinMesh.position.set(0, 1.05, -0.2);
+            cabinMesh.castShadow = true;
+            chassisMesh.add(cabinMesh);
+
+            // Headlights
+            const headLightGeo = new THREE.BoxGeometry(0.35, 0.12, 0.1);
+            const headLightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            
+            const hlLeft = new THREE.Mesh(headLightGeo, headLightMat);
+            hlLeft.position.set(0.65, 0.55, 2.11);
+            chassisMesh.add(hlLeft);
+
+            const hlRight = new THREE.Mesh(headLightGeo, headLightMat);
+            hlRight.position.set(-0.65, 0.55, 2.11);
+            chassisMesh.add(hlRight);
+
+            // Spotlight Headlight Beams
+            const spotLeft = new THREE.SpotLight(0xffffff, 3.5, 40, Math.PI / 5, 0.4);
+            spotLeft.position.set(0.65, 0.55, 2.15);
+            spotLeft.target.position.set(0.65, 0.2, 10);
+            chassisMesh.add(spotLeft);
+            chassisMesh.add(spotLeft.target);
+            headLights.push(spotLeft);
+
+            const spotRight = new THREE.SpotLight(0xffffff, 3.5, 40, Math.PI / 5, 0.4);
+            spotRight.position.set(-0.65, 0.55, 2.15);
+            spotRight.target.position.set(-0.65, 0.2, 10);
+            chassisMesh.add(spotRight);
+            chassisMesh.add(spotRight.target);
+            headLights.push(spotRight);
+
+            // Taillights
+            const tailGeo = new THREE.BoxGeometry(0.4, 0.12, 0.1);
+            const tailMat = new THREE.MeshStandardMaterial({ color: 0xd97706, emissive: 0xd97706, emissiveIntensity: 0.5 });
+            
+            const tlLeft = new THREE.Mesh(tailGeo, tailMat);
+            tlLeft.position.set(0.65, 0.6, -2.11);
+            chassisMesh.add(tlLeft);
+            tailLightMeshes.push(tlLeft);
+
+            const tlRight = new THREE.Mesh(tailGeo, tailMat);
+            tlRight.position.set(-0.65, 0.6, -2.11);
+            chassisMesh.add(tlRight);
+            tailLightMeshes.push(tlRight);
+
+            scene.add(chassisMesh);
+
+            // 3. Visual Wheels Setup
+            const wheelGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.3, 24);
+            wheelGeo.rotateZ(Math.PI / 2);
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.7, metalness: 0.2 });
+            const rimMat = new THREE.MeshStandardMaterial({ color: 0xe5e7eb, metalness: 0.9, roughness: 0.1 });
+
+            for (let i = 0; i < 4; i++) {
+                const wheelGroup = new THREE.Group();
+                const tire = new THREE.Mesh(wheelGeo, wheelMat);
+                tire.castShadow = true;
+                wheelGroup.add(tire);
+
+                // Rim Spokes
+                const rim = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.65, 0.28), rimMat);
+                wheelGroup.add(rim);
+
+                scene.add(wheelGroup);
+                wheelMeshes.push(wheelGroup);
+            }
+        }
+
+        /* =========================================================================
+           WEB AUDIO API SOUND SYNTHESIS
+           ========================================================================= */
+        function initAudio() {
+            if (audioCtx) return;
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+                // Engine Synthesizer Node Chain
+                engineOsc = audioCtx.createOscillator();
+                engineOsc.type = 'sawtooth';
+                engineOsc.frequency.setValueAtTime(60, audioCtx.currentTime);
+
+                engineFilter = audioCtx.createBiquadFilter();
+                engineFilter.type = 'lowpass';
+                engineFilter.frequency.setValueAtTime(400, audioCtx.currentTime);
+
+                engineGain = audioCtx.createGain();
+                engineGain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+
+                engineOsc.connect(engineFilter);
+                engineFilter.connect(engineGain);
+                engineGain.connect(audioCtx.destination);
+                engineOsc.start();
+
+                // Dynamic Tire Screech Buffer Synthesizer
+                const bufferSize = audioCtx.sampleRate * 1.5;
+                screechBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = screechBuffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1; // White noise
+                }
+
+                screechGain = audioCtx.createGain();
+                screechGain.gain.setValueAtTime(0, audioCtx.currentTime);
+                screechGain.connect(audioCtx.destination);
+
+                audioEnabled = true;
+            } catch (e) {
+                console.warn("Audio Context setup failed:", e);
+            }
+        }
+
+        function updateAudio() {
+            if (!audioEnabled || !audioCtx) return;
+
+            // Map engine RPM (800 - 7000) to oscillator frequency pitch (50Hz - 380Hz)
+            const targetFreq = 50 + (engineRPM / 7000) * 330;
+            engineOsc.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.05);
+
+            const filterFreq = 300 + (engineRPM / 7000) * 2200;
+            engineFilter.frequency.setTargetAtTime(filterFreq, audioCtx.currentTime, 0.05);
+
+            // Tire screech trigger during heavy lateral drift or hard braking
+            const lateralVel = chassisBody.vectorToLocalFrame(chassisBody.velocity).x;
+            if (Math.abs(lateralVel) > 4.5 && currentSpeed > 15) {
+                if (!screechNode) {
+                    screechNode = audioCtx.createBufferSource();
+                    screechNode.buffer = screechBuffer;
+                    screechNode.loop = true;
+                    screechNode.connect(screechGain);
+                    screechNode.start();
+                }
+                screechGain.gain.setTargetAtTime(0.25, audioCtx.currentTime, 0.05);
+            } else {
+                screechGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.08);
+            }
+        }
+
+        /* =========================================================================
+           INPUT CONTROLS & EVENT LISTENERS
+           ========================================================================= */
+        function setupEvents() {
+            // Keyboard Controls
+            window.addEventListener('keydown', (e) => {
+                keyState[e.code] = true;
+
+                // Hotkey shortcuts
+                if (e.code === 'KeyC') switchCamera();
+                if (e.code === 'KeyR') resetCar();
+                if (e.code === 'KeyL') toggleHeadlights();
+                if (e.code === 'KeyN') toggleDayNight();
+                if (e.code === 'KeyM') toggleAudio();
+
+                // Initialize audio on user interaction
+                if (!audioCtx) initAudio();
+            });
+
+            window.addEventListener('keyup', (e) => {
+                keyState[e.code] = false;
+            });
+
+            // Touch Control Bindings
+            bindTouch('touch-gas', 'gas');
+            bindTouch('touch-brake', 'brake');
+            bindTouch('touch-left', 'left');
+            bindTouch('touch-right', 'right');
+            bindTouch('touch-handbrake', 'handbrake');
+
+            // Screen Resize Listener
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function bindTouch(elementId, stateProp) {
+            const btn = document.getElementById(elementId);
+            if (!btn) return;
+            
+            const start = (e) => {
+                e.preventDefault();
+                touchState[stateProp] = true;
+                btn.classList.add('active');
+                if (!audioCtx) initAudio();
+            };
+            const end = (e) => {
+                e.preventDefault();
+                touchState[stateProp] = false;
+                btn.classList.remove('active');
+            };
+
+            btn.addEventListener('touchstart', start, { passive: false });
+            btn.addEventListener('touchend', end, { passive: false });
+            btn.addEventListener('mousedown', start);
+            btn.addEventListener('mouseup', end);
+            btn.addEventListener('mouseleave', end);
+        }
+
+        function setupUI() {
+            // Top Toolbar Buttons
+            document.getElementById('btn-camera').addEventListener('click', switchCamera);
+            document.getElementById('btn-reset').addEventListener('click', resetCar);
+            document.getElementById('btn-headlights').addEventListener('click', toggleHeadlights);
+            document.getElementById('btn-daynight').addEventListener('click', toggleDayNight);
+            document.getElementById('btn-audio').addEventListener('click', toggleAudio);
+
+            // Customizer Side Drawer Panel Toggle
+            const panel = document.getElementById('settings-panel');
+            document.getElementById('btn-settings').addEventListener('click', () => {
+                panel.classList.remove('translate-x-full');
+            });
+            document.getElementById('btn-close-settings').addEventListener('click', () => {
+                panel.classList.add('translate-x-full');
+            });
+
+            // Color Picker Buttons
+            document.querySelectorAll('.color-picker-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const hexStr = e.target.getAttribute('data-color');
+                    carColor = parseInt(hexStr.replace('#', '0x'));
+                    
+                    // Update car mesh paint material
+                    chassisMesh.children[0].material.color.setHex(carColor);
+
+                    // Update UI button selection outlines
+                    document.querySelectorAll('.color-picker-btn').forEach(b => b.classList.replace('border-white/50', 'border-transparent'));
+                    e.target.classList.replace('border-transparent', 'border-white/50');
+                });
+            });
+
+            // Suspension Slider
+            const sliderSusp = document.getElementById('slider-suspension');
+            sliderSusp.addEventListener('input', (e) => {
+                suspensionStiffness = parseFloat(e.target.value);
+                document.getElementById('suspension-val').innerText = suspensionStiffness;
+                for (let i = 0; i < 4; i++) {
+                    vehicle.wheelInfos[i].suspensionStiffness = suspensionStiffness;
+                }
+            });
+
+            // Grip Slider
+            const sliderGrip = document.getElementById('slider-grip');
+            sliderGrip.addEventListener('input', (e) => {
+                frictionSlip = parseFloat(e.target.value);
+                document.getElementById('grip-val').innerText = frictionSlip;
+                for (let i = 0; i < 4; i++) {
+                    vehicle.wheelInfos[i].frictionSlip = frictionSlip;
+                }
+            });
+
+            // Power Slider
+            const sliderPower = document.getElementById('slider-power');
+            sliderPower.addEventListener('input', (e) => {
+                maxEngineForce = parseFloat(e.target.value);
+                document.getElementById('power-val').innerText = maxEngineForce;
+            });
+        }
+
+        /* =========================================================================
+           ACTION & FEATURE HANDLERS
+           ========================================================================= */
+        function switchCamera() {
+            cameraMode = (cameraMode + 1) % cameraModeNames.length;
+            document.getElementById('cam-label').innerText = cameraModeNames[cameraMode];
+            showToast("Camera: " + cameraModeNames[cameraMode]);
+        }
+
+        function resetCar() {
+            chassisBody.position.set(0, 2, 0);
+            chassisBody.quaternion.set(0, 0, 0, 1);
+            chassisBody.velocity.set(0, 0, 0);
+            chassisBody.angularVelocity.set(0, 0, 0);
+            showToast("Vehicle Reset");
+        }
+
+        function toggleHeadlights() {
+            const on = headLights[0].intensity === 0;
+            headLights.forEach(l => l.intensity = on ? 3.5 : 0);
+            document.getElementById('icon-headlight').className = on ? 
+                "fa-solid fa-lightbulb text-amber-400" : "fa-regular fa-lightbulb text-gray-400";
+            showToast("Headlights " + (on ? "ON" : "OFF"));
+        }
+
+        function toggleDayNight() {
+            isNight = !isNight;
+            const bg = isNight ? new THREE.Color(0x030712) : new THREE.Color(0x87ceeb);
+            scene.background = bg;
+            scene.fog.color = bg;
+            ambientLight.intensity = isNight ? 0.15 : 0.6;
+            sunLight.intensity = isNight ? 0.2 : 1.2;
+            document.getElementById('icon-daynight').className = isNight ? "fa-solid fa-moon text-blue-300" : "fa-solid fa-sun text-yellow-400";
+            
+            // Turn on headlights automatically at night
+            if (isNight && headLights[0].intensity === 0) toggleHeadlights();
+            showToast(isNight ? "Night Time" : "Day Time");
+        }
+
+        function toggleAudio() {
+            if (!audioCtx) {
+                initAudio();
+            } else {
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                    audioEnabled = true;
+                } else if (audioCtx.state === 'running') {
+                    audioCtx.suspend();
+                    audioEnabled = false;
+                }
+            }
+            const icon = document.getElementById('icon-audio');
+            icon.className = audioEnabled ? "fa-solid fa-volume-high text-base" : "fa-solid fa-volume-xmark text-base text-red-400";
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast-msg');
+            toast.innerText = msg;
+            toast.classList.remove('opacity-0', 'translate-y-2');
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+            }, 2500);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /* =========================================================================
+           MAIN ANIMATION & GAME LOOP
+           ========================================================================= */
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Step Physics Engine (60 FPS)
+            world.step(1 / 60);
+
+            // Drive Controls Logic Input Processing
+            let engineForce = 0;
+            let brakeForce = 0;
+            let steeringAngle = 0;
+
+            const isAccelerating = keyState['KeyW'] || keyState['ArrowUp'] || touchState.gas;
+            const isBraking = keyState['KeyS'] || keyState['ArrowDown'] || touchState.brake;
+            const isSteerLeft = keyState['KeyA'] || keyState['ArrowLeft'] || touchState.left;
+            const isSteerRight = keyState['KeyD'] || keyState['ArrowRight'] || touchState.right;
+            const isHandbrake = keyState['Space'] || touchState.handbrake;
+
+            // Calculate Speed in km/h
+            const velocity = chassisBody.velocity;
+            currentSpeed = Math.round(velocity.length() * 3.6);
+
+            if (isAccelerating) {
+                engineForce = -maxEngineForce; // Rear wheel drive forward
+            } else if (isBraking) {
+                if (currentSpeed > 3) {
+                    brakeForce = maxBrakingForce; // Active braking
+                } else {
+                    engineForce = maxEngineForce * 0.5; // Reverse gear
+                }
+            }
+
+            if (isSteerLeft) steeringAngle = 0.45;
+            if (isSteerRight) steeringAngle = -0.45;
+
+            // Apply Wheel Forces to Raycast Vehicle
+            // Front steering wheels (index 0 and 1)
+            vehicle.setSteeringValue(steeringAngle, 0);
+            vehicle.setSteeringValue(steeringAngle, 1);
+
+            // Rear driving wheels (index 2 and 3)
+            vehicle.applyEngineForce(engineForce, 2);
+            vehicle.applyEngineForce(engineForce, 3);
+
+            // Apply Brake Forces
+            for (let i = 0; i < 4; i++) {
+                if (isHandbrake) {
+                    vehicle.setBrake(maxBrakingForce * 2, i);
+                } else {
+                    vehicle.setBrake(brakeForce, i);
+                }
+            }
+
+            // Sync Visual Chassis Mesh with Physics Body
+            chassisMesh.position.copy(chassisBody.position);
+            chassisMesh.quaternion.copy(chassisBody.quaternion);
+
+            // Sync Visual Wheel Meshes with Physics Wheel Transforms
+            for (let i = 0; i < vehicle.wheelInfos.length; i++) {
+                vehicle.updateWheelTransform(i);
+                const transform = vehicle.wheelInfos[i].worldTransform;
+                wheelMeshes[i].position.copy(transform.position);
+                wheelMeshes[i].quaternion.copy(transform.quaternion);
+            }
+
+            // Update Taillight Braking Visuals
+            tailLightMeshes.forEach(mesh => {
+                mesh.material.emissiveIntensity = (isBraking || isHandbrake) ? 2.5 : 0.4;
+            });
+
+            // Telemetry: Engine RPM & Gear Calculation
+            if (isAccelerating) {
+                engineRPM = Math.min(7000, 1000 + (currentSpeed % 50) * 120 + currentSpeed * 15);
+            } else {
+                engineRPM = Math.max(800, engineRPM - 60);
+            }
+
+            // Simple Automatic Transmission Shifting Logic
+            if (currentSpeed < 5 && isBraking) currentGear = 'R';
+            else if (currentSpeed < 30) currentGear = '1';
+            else if (currentSpeed < 65) currentGear = '2';
+            else if (currentSpeed < 105) currentGear = '3';
+            else if (currentSpeed < 140) currentGear = '4';
+            else currentGear = '5';
+
+            // Drift Scoring System Detection
+            const localVelocity = chassisBody.vectorToLocalFrame(chassisBody.velocity);
+            const lateralSlip = Math.abs(localVelocity.x);
+            if (lateralSlip > 4.0 && currentSpeed > 20) {
+                activeDriftCombo += Math.round(lateralSlip * 2);
+                document.getElementById('drift-box').classList.remove('opacity-0', 'scale-90');
+                document.getElementById('drift-score').innerText = `+${activeDriftCombo}`;
+            } else if (activeDriftCombo > 0) {
+                driftScore += activeDriftCombo;
+                activeDriftCombo = 0;
+                setTimeout(() => {
+                    document.getElementById('drift-box').classList.add('opacity-0', 'scale-90');
+                }, 1000);
+            }
+
+            // Sync Physics Traffic Cone Obstacles Visuals
+            physicsObstacles.forEach(item => {
+                item.mesh.position.copy(item.body.position);
+                item.mesh.quaternion.copy(item.body.quaternion);
+            });
+
+            // Dynamic Camera Controller
+            updateCamera();
+
+            // Update Synthesized Engine Sounds
+            updateAudio();
+
+            // Render HUD UI Updates
+            updateHUD();
+
+            // Render 3D Three.js Scene
+            renderer.render(scene, camera);
+        }
+
+        function updateCamera() {
+            const carPos = chassisMesh.position;
+            const carQuat = chassisMesh.quaternion;
+
+            if (cameraMode === 0) {
+                // Smooth Follow / Chase Camera
+                const offset = new THREE.Vector3(0, 3.2, -8.5);
+                offset.applyQuaternion(carQuat);
+                const targetPos = carPos.clone().add(offset);
+                camera.position.lerp(targetPos, 0.1);
+                
+                const lookTarget = carPos.clone().add(new THREE.Vector3(0, 1.2, 2));
+                camera.lookAt(lookTarget);
+            } else if (cameraMode === 1) {
+                // Cockpit / 1st Person Camera
+                const offset = new THREE.Vector3(0, 1.2, 0.2);
+                offset.applyQuaternion(carQuat);
+                camera.position.copy(carPos.clone().add(offset));
+
+                const lookTarget = carPos.clone().add(new THREE.Vector3(0, 1.2, 20).applyQuaternion(carQuat));
+                camera.lookAt(lookTarget);
+            } else if (cameraMode === 2) {
+                // Hood Camera
+                const offset = new THREE.Vector3(0, 0.95, 1.6);
+                offset.applyQuaternion(carQuat);
+                camera.position.copy(carPos.clone().add(offset));
+
+                const lookTarget = carPos.clone().add(new THREE.Vector3(0, 0.8, 15).applyQuaternion(carQuat));
+                camera.lookAt(lookTarget);
+            } else if (cameraMode === 3) {
+                // Top Down Camera
+                camera.position.set(carPos.x, carPos.y + 35, carPos.z);
+                camera.lookAt(carPos);
+            } else if (cameraMode === 4) {
+                // Slow Orbit Cam around car
+                const time = Date.now() * 0.0005;
+                camera.position.set(
+                    carPos.x + Math.sin(time) * 12,
+                    carPos.y + 4,
+                    carPos.z + Math.cos(time) * 12
+                );
+                camera.lookAt(carPos);
+            }
+        }
+
+        function updateHUD() {
+            // Speedometer Number Readout
+            document.getElementById('speed-display').innerText = currentSpeed;
+            document.getElementById('gear-display').innerText = currentGear;
+            document.getElementById('rpm-display').innerText = Math.round(engineRPM);
+
+            // SVG Speed / RPM Arc Ring Gauge Calculation
+            const maxRpm = 7000;
+            const rpmRatio = Math.min(1.0, engineRPM / maxRpm);
+            const maxDash = 251.2; // 2 * PI * 40
+            const dashOffset = maxDash - (rpmRatio * maxDash * 0.75);
+            document.getElementById('rpm-arc').style.strokeDashoffset = dashOffset;
+        }
+    </script>
+</body>
+</html>
