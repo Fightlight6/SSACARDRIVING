@@ -779,9 +779,9 @@
             wheelMeshes[0].rotation.y = steerAngle;
             wheelMeshes[1].rotation.y = steerAngle;
 
-            // 2. Acceleration & Engine Force
+            // 2. Acceleration & Engine Force (Reduced 3x for slower, more controllable driving)
             let accelForce = 0;
-            const maxAccel = driveMode === 'SPORT' ? 28 : (driveMode === 'DRIFT' ? 32 : 20);
+            const maxAccel = driveMode === 'SPORT' ? 9.3 : (driveMode === 'DRIFT' ? 10.7 : 6.7);
 
             if (isNitroPressed && nitroAmount > 0 && isAccelerating) {
                 isNitroActive = true;
@@ -819,7 +819,7 @@
 
             // Turn Car Yaw based on Speed & Steering
             const forwardSpeed = carVel.dot(forwardDir);
-            const turnRate = steerAngle * (forwardSpeed / 8) * (driveMode === 'DRIFT' ? 1.6 : 1.1);
+            const turnRate = steerAngle * (forwardSpeed / 2.7) * (driveMode === 'DRIFT' ? 1.6 : 1.1);
             carYaw += turnRate * delta;
 
             // Lateral Drift Friction (Sliding)
@@ -829,8 +829,8 @@
 
             carVel.addScaledVector(rightDir, -sideVel * (1 - grip));
 
-            // Move Car Position
-            carPos.addScaledVector(carVel, delta * 18);
+            // Move Car Position (3x Slower World Velocity)
+            carPos.addScaledVector(carVel, delta * 6);
 
             // Ground & Stunt Jump Altitude
             if (carPos.y > 0) {
@@ -847,19 +847,19 @@
             carGroup.rotation.y = carYaw;
 
             // Wheel Spin Visual
-            const wheelSpinSpeed = forwardSpeed * delta * 4;
+            const wheelSpinSpeed = forwardSpeed * delta * 1.33;
             wheelMeshes.forEach(w => w.children[0].rotation.x += wheelSpinSpeed);
 
-            // Calculate Speed in KM/H (Zero baseline when stationary!)
-            currentSpeed = carVel.length() < 0.05 ? 0 : Math.round(carVel.length() * 18);
+            // Calculate Speed in KM/H (Scaled down 3x to match new movement speed)
+            currentSpeed = carVel.length() < 0.05 ? 0 : Math.round(carVel.length() * 6);
 
-            // 4. Tire Smoke & Drift Counter
-            const isDrifting = (Math.abs(sideVel) > 2.2 || isHandbrake) && currentSpeed > 15;
+            // 4. Tire Smoke & Drift Counter (Thresholds updated for lower speed range)
+            const isDrifting = (Math.abs(sideVel) > 0.75 || isHandbrake) && currentSpeed > 5;
             if (isDrifting) {
                 const rearLeftPos = carPos.clone().add(new THREE.Vector3(1, 0.2, -1.3).applyAxisAngle(new THREE.Vector3(0,1,0), carYaw));
                 triggerTireSmoke(rearLeftPos);
 
-                activeDriftCombo += Math.round(Math.abs(sideVel) * 5);
+                activeDriftCombo += Math.round(Math.abs(sideVel) * 15);
                 document.getElementById('drift-box').classList.remove('opacity-0', 'scale-90');
                 document.getElementById('drift-score').innerText = `+${activeDriftCombo}`;
             } else if (activeDriftCombo > 0) {
